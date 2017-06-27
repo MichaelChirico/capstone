@@ -1,0 +1,33 @@
+Type,category
+medic response,medic
+auto fire alarm,fire
+automatic fire alarm resd,fire
+1red 1 unit,fire
+rescue elevator,fire
+medic response 7 per rule,medic
+medic response 6 per rule,medic
+investigate out of service,fire
+alarm bell,fire
+illegal burn,fire
+water job minor,false
+car fire,fire
+4red 2 1 1,fire
+3red 1 1 1,fire
+activated co detector,fire
+natural gas odor,fire
+unk odor,fire
+fire in building,fire
+brush fire,fire
+rescue lock in out,fire
+rubbish fire,fire
+afa4 auto alarm 2 1 1,fire
+assault w weap 7 per rule,medic
+bark fire,fire
+fire in single family res,fire
+electrical problem,fire
+car fire freeway,fire
+fire response freeway,fire
+brush fire freeway,fire
+car fire w exp,fire
+rescue heavy,fire
+rescue automobile,fire
