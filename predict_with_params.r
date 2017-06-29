@@ -1,4 +1,4 @@
-
+#!/usr/bin/env Rscript
 library(spatstat)
 library(splancs)
 library(rgeos)
@@ -8,12 +8,11 @@ library(maptools)
 #from random.org
 set.seed(19775046)
 
-
 #set of parameters that run quickly for testing
 delx=600; dely=600
 eta=1; lt=14; theta=0
-features=250; kde.bw=500; 
-kde.lags=6; kde.win = 3
+features=0; kde.bw=500; 
+kde.lags=1; kde.win = 7
 call.type='fire'
 
 incl_mos = c(10L, 11L, 12L, 1L, 2L, 3L)
@@ -91,11 +90,6 @@ grdtop <- as(as.SpatialGridDataFrame.im(
 
 # index to rearrange rows in pixellate objects
 idx.new <- getGTindices(grdtop)
-plot(seattle, main = paste('Rotated Version of Buffered Seattle Boundary',
-                           'with June 2017 Events (last week: blue)', sep = '\n'),
-     type = 'l', xlab = 'E-W Coordinate', ylab = 'N-S Coordinate')
-invisible(calls[date >= '2017-06-01', points(x_lon, y_lat, col = 'red')])
-invisible(calls[date >= '2017-06-21', points(x_lon, y_lat, col = 'blue')])
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
 # CREATE DATA TABLE OF CALLS ----
@@ -226,7 +220,7 @@ compute.kde <- function(pts, start, lag.no) {
   if (!length(idx)) return(rep(0, length(incl_ids)))
   kde = spkernel2d(pts = pts[idx, ],
                    #immediately exclude never-crime cells
-                   poly = seattle[seq(1, nrow(seattle), by = 3), ], h0 = kde.bw, grd = grdtop)[incl_ids]
+                   poly = seattle, h0 = kde.bw, grd = grdtop)[incl_ids]
 }
 
 #start_lag facilitates using within-group lapply
@@ -296,6 +290,7 @@ phi.dt =
       list(rff_namespace = '|rff'))
   }]
 
+if (features == 0) phi.dt[ , rff_namespace := NULL]
 #about to assign a lot of columns using set --
 #  will fail if we don't warn data.table that
 #  phi.dt is going to grow substantially
@@ -310,7 +305,7 @@ if (features > 500L) invisible(alloc.col(phi.dt, 3L*features))
 #  simultaneously with assigning to phi.dt.
 cat('\nStarting Feature Addition')
 fkt = 1/sqrt(features)
-for (jj in 1L:features) {
+for (jj in seq_len(features)) {
   #message not cat/print, see:
   #  https://stackoverflow.com/a/37697136/3576984
   if (jj %% 50 == 0) message('Added ', jj, ' features')
