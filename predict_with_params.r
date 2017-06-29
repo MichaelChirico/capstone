@@ -92,9 +92,10 @@ grdtop <- as(as.SpatialGridDataFrame.im(
 # index to rearrange rows in pixellate objects
 idx.new <- getGTindices(grdtop)
 plot(seattle, main = paste('Rotated Version of Buffered Seattle Boundary',
-                           'with a sample of 1000 events', sep = '\n'),
+                           'with June 2017 Events (last week: blue)', sep = '\n'),
      type = 'l', xlab = 'E-W Coordinate', ylab = 'N-S Coordinate')
-invisible(calls[sample(.N, 1000), points(x_lon, y_lat, col = 'red')])
+invisible(calls[date >= '2017-06-01', points(x_lon, y_lat, col = 'red')])
+invisible(calls[date >= '2017-06-21', points(x_lon, y_lat, col = 'blue')])
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
 # CREATE DATA TABLE OF CALLS ----
@@ -225,7 +226,7 @@ compute.kde <- function(pts, start, lag.no) {
   if (!length(idx)) return(rep(0, length(incl_ids)))
   kde = spkernel2d(pts = pts[idx, ],
                    #immediately exclude never-crime cells
-                   poly = seattle, h0 = kde.bw, grd = grdtop)[incl_ids]
+                   poly = seattle[seq(1, nrow(seattle), by = 3), ], h0 = kde.bw, grd = grdtop)[incl_ids]
 }
 
 #start_lag facilitates using within-group lapply
@@ -237,12 +238,10 @@ start_lag = CJ(start = start, lag = seq_len(kde.lags))
 #  column associated with the grid cell;
 #  do this by start_date to complete
 #  the lagged-KDE specification on the RHS of the model
-cat('Adding KDEs')
 RHS = start_lag[ , 
     c(I = list(incl_ids),
       lapply(setNames(lag, paste0('lag', lag)), compute.kde,
              pts = calls.sp, start = .BY$start)), by = start]
-cat('\nDone KDEs')
     
 #join to our main data.table
 X = X[RHS, on = c(start_date = 'start', 'I')]
@@ -312,10 +311,12 @@ if (features > 500L) invisible(alloc.col(phi.dt, 3L*features))
 cat('\nStarting Feature Addition')
 fkt = 1/sqrt(features)
 for (jj in 1L:features) {
-  if (jj %% 50 == 0) cat('\nAdded', jj, 'features')
+  #message not cat/print, see:
+  #  https://stackoverflow.com/a/37697136/3576984
+  if (jj %% 50 == 0) message('Added ', jj, ' features')
   pj = proj[ , jj]
   set(phi.dt, j = paste0(c("cos", "sin"), jj), 
-      #these are the paired random fourier features;
+      #these are the paired random fourier features;  
       #  truncating at 5 digits to rein in file size
       value = list(sprintf("cos%i:%.5f", jj, fkt*cos(pj)),
                    sprintf("sin%i:%.5f", jj, fkt*sin(pj))))
@@ -361,6 +362,10 @@ scores =
 #for easy/clean updating syntax
 setkey(scores, train_set, alpha, l1, l2)
 
+chktm = tempfile(tmpdir = tdir)
+cat('----Timings for run started ', as.character(Sys.time()), '----',
+    file = chktm)
+      
 #loop over using each year's holdout test set to calculate PEI/PAI
 for (train in train_variations) {
   #these are the test data
@@ -383,10 +388,8 @@ for (train in train_variations) {
   
   fwrite(phi.dt[!test_idx], train.vw,
          sep = " ", quote = FALSE, col.names = FALSE)
-  cat('\nWrote training data for', train)
   fwrite(phi.dt[test_idx], test.vw,
          sep = " ", quote = FALSE, col.names = FALSE)
-  cat('\nWrote test data for', train)
   
   # used to delete phi.dt & subset X here to cut down on
   #   RAM hit. optionally, could split this into two
@@ -399,6 +402,7 @@ for (train in train_variations) {
   NN = X[test_idx, sum(value)]
   
   # looping over calls to VW
+  message('VW runs beginning for ', train)
   for (ii in seq_len(nrow(vw_variations))) {
     # print(ii)
     L1 = vw_variations[ii, l1]
@@ -412,17 +416,17 @@ for (train in train_variations) {
     #ingore.stderr since this is where system outputs,
     #  and having all of the VW output (save for debugging)
     #  was just cluttering up the output files
-    system(call.vw, ignore.stderr = TRUE)
-    cat('\nVW training complete')
+    
+    
+    cat('\n', system.time(system(call.vw))['elapsed'],
+        file = chktm, append = TRUE)
     #training data now stored in cache format,
     #  so can delete original (don't need to, but this is a useful
     #  check to force an error if s.t. wrong with cache)
     if (file.exists(train.vw)) invisible(file.remove(train.vw))
     #test with VW
     system(paste('vw -t -i', model, '-p', pred.vw,
-                 test.vw, '--loss_function poisson'),
-           ignore.stderr = TRUE)
-    cat('\nVW testing complete')
+                 test.vw, '--loss_function poisson'))
     invisible(file.remove(model))
     
     preds =
@@ -475,21 +479,3 @@ for (train in train_variations) {
   }
   invisible(file.remove(cache, test.vw))
 }
-
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-# PRINT SCORES TO STDOUT  ====
-# used when capturing score with Spearmint
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-
-best.pai = scores[ , max(pai), by = train_set][ , mean(V1)]
-best.pei = scores[ , max(pei), by = train_set][ , mean(V1)]
-best_scores = paste(best.pai,best.pei, sep = '/')
-best_scores = paste0('[[[', best_scores,']]]')
-print(best_scores)
-
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-# WRITE RESULTS FILE 
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-
-ff = paste0("scores/", 'ar_ws_my_',call.type, "_", job_id, ".csv")
-fwrite(scores, ff, append = file.exists(ff))
