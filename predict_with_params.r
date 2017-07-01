@@ -1,19 +1,42 @@
 #!/usr/bin/env Rscript
-library(spatstat)
-library(splancs)
-library(rgeos)
-library(data.table)
-library(maptools)
+suppressMessages({
+  library(spatstat, quietly = TRUE)
+  library(splancs, quietly = TRUE)
+  library(rgeos)
+  library(data.table, warn.conflicts = FALSE, quietly = TRUE)
+  library(maptools)
+})
 
 #from random.org
 set.seed(19775046)
 
-#set of parameters that run quickly for testing
-delx=600; dely=600
-eta=1; lt=14; theta=0
-features=0; kde.bw=500; 
-kde.lags=1; kde.win = 7
-call.type='fire'
+#add/remove ! below to turn testing on/off
+..testing = 
+  FALSE
+if (..testing) {
+  #set of parameters that run quickly for testing
+  delx=600; dely=600
+  eta=1; lt=14; theta=0.91806921873
+  features=0; kde.bw=500; 
+  kde.lags=1; kde.win = 7
+  call.type='fire'
+  cat("**********************\n",
+      "* TEST PARAMETERS ON *\n",
+      "**********************\n")
+} else {
+  # each argument read in as a string in a character vector;
+  # would rather have them as a list. basically do
+  # that by converting them to a form read.table
+  # understands and then attaching from a data.frame
+  args = read.table(text = paste(commandArgs(trailingOnly = TRUE),
+                                 collapse = '\t'),
+                    stringsAsFactors = FALSE)
+  names(args) =
+    c('delx', 'dely', 'eta', 'lt', 'theta', 
+      'features', 'kde.bw', 'kde.lags',
+      'kde.win', 'call.type')
+  attach(args)
+}
 
 incl_mos = c(10L, 11L, 12L, 1L, 2L, 3L)
 
@@ -51,7 +74,7 @@ RT = function(theta) matrix(c(cos(theta), -sin(theta),
 #   call types/horizons will result in different
 #   rotated grids, since point0 will likely differ)
 point0 = calls[ , c(min(x_lon), min(y_lat))]
-calls[ , paste0(c('x', 'y'), '_lat') :=
+calls[ , c('x_lon', 'y_lat') :=
           as.data.table(rotate(x_lon, y_lat, theta, point0))]
 
 #boundary coordinates of seattle,
@@ -303,12 +326,8 @@ if (features > 500L) invisible(alloc.col(phi.dt, 3L*features))
 #  but this _appears_ to be slower than implicitly
 #  creating this as below by taking sin/cos 
 #  simultaneously with assigning to phi.dt.
-cat('\nStarting Feature Addition')
 fkt = 1/sqrt(features)
 for (jj in seq_len(features)) {
-  #message not cat/print, see:
-  #  https://stackoverflow.com/a/37697136/3576984
-  if (jj %% 50 == 0) message('Added ', jj, ' features')
   pj = proj[ , jj]
   set(phi.dt, j = paste0(c("cos", "sin"), jj), 
       #these are the paired random fourier features;  
@@ -357,10 +376,6 @@ scores =
 #for easy/clean updating syntax
 setkey(scores, train_set, alpha, l1, l2)
 
-chktm = tempfile(tmpdir = tdir)
-cat('----Timings for run started ', as.character(Sys.time()), '----',
-    file = chktm)
-      
 #loop over using each year's holdout test set to calculate PEI/PAI
 for (train in train_variations) {
   #these are the test data
@@ -397,7 +412,6 @@ for (train in train_variations) {
   NN = X[test_idx, sum(value)]
   
   # looping over calls to VW
-  message('VW runs beginning for ', train)
   for (ii in seq_len(nrow(vw_variations))) {
     # print(ii)
     L1 = vw_variations[ii, l1]
@@ -413,15 +427,15 @@ for (train in train_variations) {
     #  was just cluttering up the output files
     
     
-    cat('\n', system.time(system(call.vw))['elapsed'],
-        file = chktm, append = TRUE)
+    system(call.vw, ignore.stderr = TRUE)
     #training data now stored in cache format,
     #  so can delete original (don't need to, but this is a useful
     #  check to force an error if s.t. wrong with cache)
     if (file.exists(train.vw)) invisible(file.remove(train.vw))
     #test with VW
     system(paste('vw -t -i', model, '-p', pred.vw,
-                 test.vw, '--loss_function poisson'))
+                 test.vw, '--loss_function poisson'),
+           ignore.stderr = TRUE)
     invisible(file.remove(model))
     
     preds =
@@ -474,3 +488,10 @@ for (train in train_variations) {
   }
   invisible(file.remove(cache, test.vw))
 }
+
+# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
+# WRITE RESULTS FILE 
+# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
+
+ff = paste0("scores/", call.type, "_kde_only.csv")
+fwrite(scores, ff, append = file.exists(ff))

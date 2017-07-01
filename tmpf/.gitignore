@@ -1,3 +1,4 @@
-# don't need to track temp files
+#keep for structure
 *
 !.gitignore
+
