@@ -371,7 +371,7 @@ scores =
      eta = eta, lt = lt, theta = theta,
      k = features, l1 = l1s, l2 = l2s,
      kde.bw = kde.bw, kde.lags = kde.lags,
-     kde.win = kde.win, pei = 0, pai = 0)
+     kde.win = kde.win, pei = 0)
 
 #for easy/clean updating syntax
 setkey(scores, train_set, alpha, l1, l2)
@@ -406,11 +406,6 @@ for (train in train_variations) {
   #   for loops -- one to write out the files (could then
   #   delete phi.dt) and then another to run VW
 
-  #Calculate PAI denominator here since it is the
-  #  same for all variations of tuning parameters,
-  #  given the input parameters (delx, etc.)
-  NN = X[test_idx, sum(value)]
-  
   # looping over calls to VW
   for (ii in seq_len(nrow(vw_variations))) {
     # print(ii)
@@ -478,10 +473,7 @@ for (train in train_variations) {
       #PEI denominator -- total crimes in the TRUE top n.cells
       N_star = X[true_rank <= n.cells & test_idx, sum(value)]
       
-      scores[.(train, AA, L1, L2),
-             c('pei', 'pai') :=
-               #pre-calculated the total area of portland (in ft^2)
-               .(nn/N_star, pai = (nn/NN)/(aa*n.cells/4117777129))]
+      scores[.(train, AA, L1, L2), pei := nn/N_star]
     }
     #reset ranking for next run
     X[ , rank := NULL]
@@ -489,9 +481,6 @@ for (train in train_variations) {
   invisible(file.remove(cache, test.vw))
 }
 
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-# WRITE RESULTS FILE 
-# <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
-
-ff = paste0("scores/", call.type, "_kde_only.csv")
+cat('PEI: ', scores[ , .(pei = mean(pei)), keyby = .(alpha, l1, l2)][ , max(pei)])
+ff = paste0("scores/", call.type, "_random_search.csv")
 fwrite(scores, ff, append = file.exists(ff))

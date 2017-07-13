@@ -1,0 +1,62 @@
+{
+    "language"        : "PYTHON",
+    "main-file"       : "spearmint_eval_fire.py",
+    "experiment-name" : "simple-braninhoo-example",
+    "likelihood"      : "GAUSSIAN",
+    "variables" : {
+        "delx" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min"  : 125,
+            "max"  : 800
+        },
+        "dely" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min"  : 125,
+            "max"  : 800
+        },
+        "eta" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min" : 0.5,
+            "max" : 1.5
+        },
+        "lt" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min" : 1,
+            "max" : 30
+        },
+        "theta" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min" : 0,
+            "max" : 1.570796
+        },
+        "k" : {
+            "type" : "INT",
+            "size" : 1,
+            "min" : 0,
+            "max" : 200
+        },
+        "kde_bw" : {
+            "type" : "FLOAT",
+            "size" : 1,
+            "min" : 125,
+            "max" : 800
+        },
+        "kde_lags" : {
+            "type" : "INT",
+            "size" : 1,
+            "min" : 1,
+            "max" : 10
+        },
+        "kde_win" : {
+            "type" : "INT",
+            "size" : 1,
+            "min" : 1,
+            "max" : 14
+        }
+    }
+}
