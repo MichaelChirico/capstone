@@ -49,6 +49,7 @@ which.round = function(x)
 
 evaluate_pei = function(delx, dely, eta, lt, theta, k,
                         kde.bw, kde.lags, kde.win, call.type) {
+  cat('start\n')
   #from random.org
   set.seed(19775046)
 
@@ -292,7 +293,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
         lapply(incl.kde, coln_to_vw),
         list(rff_namespace = '|rff'))
     }]
-  
+  cat('added features\n')
   if (k == 0) phi.dt[ , rff_namespace := NULL]
   #about to assign a lot of columns using set --
   #  will fail if we don't warn data.table that
@@ -350,6 +351,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #for easy/clean updating syntax
   setkey(scores, train_set, alpha, l1, l2)
   
+  cat('starting training\n')
   #loop over using each year's holdout test set to calculate PEI/PAI
   for (train in train_variations) {
     #these are the test data
@@ -455,6 +457,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     invisible(file.remove(cache, test.vw))
   }
   
+  cat('done training\n')
   best_pei = scores[ , .(pei = mean(pei)), keyby = .(alpha, l1, l2)][ , max(pei)]
   ff = paste0("scores/", call.type, "_bo_runs.csv")
   fwrite(scores, ff, append = file.exists(ff))
@@ -463,37 +466,71 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
 
 evaluate_pei_fire = function(delx, dely, eta, lt, theta, k,
                              kde.bw, kde.lags, kde.win) {
-  cat(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, sep = '///')
+	cat('HELLOOOOO\n')
   evaluate_pei(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, 'fire')
 }
 
 evaluate_pei_medical = function(delx, dely, eta, lt, theta, k,
                                 kde.bw, kde.lags, kde.win) {
-  cat(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, sep = '///')
   evaluate_pei(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, 'medical')
 }
 
-initial_scores_fire = fread('scores/fire_random_search.csv')
-initial_scores_fire = 
-  initial_scores_fire[k<=150, .(Value = max(pei)),
-                      keyby = .(delx, dely, eta, lt, theta, k, 
-                                kde.bw, kde.lags, kde.win)]
+fire_random = fread('scores/fire_random_search.csv')
+fire_random = 
+  fire_random[ , .(Value = max(pei)),
+              keyby = .(delx, dely, eta, lt, theta, k, 
+                        kde.bw, kde.lags, kde.win)]
+# fire_kde = fread('scores/fire_kde_only.csv')
+# fire_kde = 
+#   fire_kde[ , .(Value = max(pei)),
+#            keyby = .(delx, dely, eta, lt, theta, k, 
+#                      kde.bw, kde.lags, kde.win)]
+if (file.exists('scores/fire_bo_runs.csv')) {
+  fire_bo = fread('scores/fire_bo_runs.csv')
+  fire_bo = 
+    fire_bo[ , .(Value = max(pei)),
+            keyby = .(delx, dely, eta, lt, theta, k, 
+                      kde.bw, kde.lags, kde.win)]
+  initial_scores_fire = rbind(fire_random, fire_bo)[k <= 150]
+  #initial_scores_fire = rbind(fire_random, fire_kde, fire_bo)[k <= 150]
+} else {
+  #initial_scores_fire = rbind(fire_random, fire_kde)[k <= 150]
+  initial_scores_fire = fire_random
+}
 
-initial_scores_medical = fread('scores/medical_random_search.csv')
-initial_scores_medical = 
-  initial_scores_medical[k<=150, .(Value = max(pei)),
-                         keyby = .(delx, dely, eta, lt, theta, k, 
-                                   kde.bw, kde.lags, kde.win)]
+medical_random = fread('scores/medical_random_search.csv')
+medical_random = 
+  medical_random[ , .(Value = max(pei)),
+                 keyby = .(delx, dely, eta, lt, theta, k, 
+                           kde.bw, kde.lags, kde.win)]
+medical_kde = fread('scores/medical_kde_only.csv')
+medical_kde = 
+  medical_kde[ , .(Value = max(pei)),
+              keyby = .(delx, dely, eta, lt, theta, k, 
+                        kde.bw, kde.lags, kde.win)]
+if (file.exists('scores/medical_bo_runs.csv')) {
+  medical_bo = fread('scores/medical_bo_runs.csv')
+  medical_bo = 
+    medical_bo[ , .(Value = max(pei)),
+               keyby = .(delx, dely, eta, lt, theta, k, 
+                         kde.bw, kde.lags, kde.win)]
+  initial_scores_medical = rbind(medical_random, medical_bo)[k <= 150]
+  #initial_scores_medical = rbind(medical_random, medical_kde, medical_bo)[k <= 150]
+} else {
+  initial_scores_medical = medical_random
+  #initial_scores_medical = rbind(medical_random, medical_kde)[k <= 150]
+}
 
 bounds = list(delx = c(125, 800), dely = c(125, 800),
               eta = c(.5, 1.5), lt = c(3, 30),
               theta = c(0, pi), k = c(0L, 150L),
-              kde.bw = c(125, 800), kde.lags = c(0L, 6L), kde.win = c(3L, 14L))
+              kde.bw = c(125, 800), kde.lags = c(1L, 6L), kde.win = c(3L, 14L))
 
 fire_opt = BayesianOptimization(evaluate_pei_fire, bounds,
                                 initial_scores_fire, 
                                 n_iter = 50, verbose = TRUE)
+save(fire_opt, 'BO_output_fire')
 medical_opt = BayesianOptimization(evaluate_pei_medical, bounds,
                                    initial_scores_medical, 
                                    n_iter = 50, verbose = TRUE)
-save(fire_opt, 'BO_output')
+save(medical_opt, 'BO_output_medical')
