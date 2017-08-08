@@ -287,6 +287,12 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #join to our main data.table
   X = X[RHS, on = c(start_date = 'start', 'I')]
   
+  if (anyNA(X)) {
+    cat(delx, dely, eta, lt, theta, k,
+        kde.bw, kde.lags, kde.win, sep = '/',
+        file = 'lead_to_na_params.ohno')
+  }
+  
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
   # Add Random Fourier Features ----
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
