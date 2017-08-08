@@ -17,9 +17,9 @@ if (!length(args)) {
       "* TEST PARAMETERS ON *\n",
       "**********************\n")
 } else {
+  start_str = commandArgs(trailingOnly = TRUE)[1L]
   forecast_start = 
-    unclass(as.IDate(commandArgs(trailingOnly = TRUE)[1L],
-                     format = '%Y%m%d'))
+    unclass(as.IDate(start_str, format = '%Y%m%d'))
   bo_file = file.path("scores", start_str, "bo_runs.csv")
   dir.create(file.path('scores', start_str),
              showWarnings = FALSE)
