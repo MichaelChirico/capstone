@@ -267,7 +267,7 @@ compute.kde <- function(pts, start, lag.no) {
 #get 1, ..., n named as lag01, ..., lag0n
 #  to facilitate adding pre-named columns
 lag_list = seq_len(kde.lags)
-names(lag_list) = sprintf('%02d', lag_list)
+names(lag_list) = sprintf('lag%02d', lag_list)
 
 #for up through kde.lags total lags to include,
 #  compute the associated KDE and add it as a
