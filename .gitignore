@@ -2,3 +2,6 @@
 .Rproj.user
 .Rhistory
 rff_pred_*
+
+kde_plot*
+rff_plot*

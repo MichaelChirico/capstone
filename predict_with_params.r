@@ -12,14 +12,14 @@ set.seed(19775046)
 
 #add/remove ! below to turn testing on/off
 ..testing = 
-  FALSE
+  !FALSE
 if (..testing) {
   #set of parameters that run quickly for testing
   delx=600; dely=600
   eta=1; lt=14; theta=0.91806921873
   features=0; kde.bw=500; 
   kde.lags=1; kde.win = 7
-  call.type='fire'
+  call.type='fire', start_str='20170301'
   cat("**********************\n",
       "* TEST PARAMETERS ON *\n",
       "**********************\n")
@@ -34,11 +34,9 @@ if (..testing) {
   names(args) =
     c('delx', 'dely', 'eta', 'lt', 'theta', 
       'features', 'kde.bw', 'kde.lags',
-      'kde.win', 'call.type')
+      'kde.win', 'call.type', 'start_str')
   attach(args)
 }
-
-incl_mos = c(10L, 11L, 12L, 1L, 2L, 3L)
 
 aa = delx*dely #forecasted area
 lx = eta*250
@@ -121,7 +119,7 @@ idx.new <- getGTindices(grdtop)
 # 3) merge previous results
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
 
-#Before subsetting, get indices of ever-crime cells
+#Before subsetting, get indices of ever-event cells
 ## Per here, these are always sorted by x,y:
 ##   https://github.com/spatstat/spatstat/issues/37
 ## NB: this must be done within-loop
@@ -148,18 +146,14 @@ incl_ids =
 ##   competition forecasting horizon
 
 # how long is one period for this horizon?
-#   NB: these are not great approximations
-#       of the horizon lengths, but what is
-#       crucial is to line up with the
-#       ultimate forecasting horizons,
-#       e.g. 1m is March 1 - 31
 pd_length = 7L
 # how many periods are there in one year for this horizon?
 one_year = 52L
-# *** TO DO ***
-# how many total periods are there in the data?
-#   2013/14/15/16/(17), though 17 not used here
-n_pds = 5L*one_year
+half_year = 26L
+yr_length = one_year * pd_length
+
+# count the number of training periods
+n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
 
 #actually easier/quicker to deal with
 #  integer representation of the dates
@@ -167,17 +161,20 @@ calls[ , date_int := unclass(date)]
 #all dates on which an event occurred
 unq_crimes = calls[ , unique(date_int)]
 
-march117 = unclass(as.IDate('2017-03-01'))
-#all possible period start dates
-start = march117 - (seq_len(n_pds) - 1L) * pd_length
-#eliminate irrelevant (summer) data
-#  and non-testable data after testing dates in 2016
-start = start[month(as.IDate(start, origin = '1970-01-01')) %in% incl_mos & 
-                start <= march117 - one_year*pd_length]
-#all period end dates (nonoverlapping with starts)
-end = start + pd_length - 1L
-#for feeding to foverlaps
-windows = data.table(start, end, key = 'start,end')
+forecast_start = unclass(as.IDate(start_str, format = '%Y%m%d'))
+#all possible period start dates --
+#  the half_year periods preceding the yr_start for each of
+#  the n_train periods in the _training_ data;
+#  yr_start is built from the input parameter start_str
+start = c(sapply(forecast_start - seq_len(n_train) * yr_length,
+                 function(yr_start) yr_start - 
+                   (seq_len(half_year) - 1L) * pd_length))
+#windows for feeding to foverlaps to assign a start_date
+#  to each unique event occurrence date
+windows = 
+  #all period end dates (nonoverlapping with starts)
+  data.table(start, end = start + pd_length - 1L,
+             key = 'start,end')
 
 call_start_map = data.table(date_int = unq_crimes)
 call_start_map[ , start_date := 
@@ -198,13 +195,12 @@ X = calls[!is.na(start_date), as.data.table(pixellate(ppp(
   #subset to eliminate never-crime cells
   keyby = start_date][ , I := rowid(start_date)][I %in% incl_ids]
 
-## *** TO DO ***
-#Use four holdout periods -- one for each possible
+#Use multiple holdout periods -- one for each possible
 #  year -- to stabilize jumpy prediction validity
-for (ii in 1:4) {
-  test_start = march117 - ii * one_year*pd_length
+for (ii in seq_len(n_trainL)) {
+  test_start = forecast_start - ii * one_year*pd_length
   X[start_date <= test_start, 
-    paste0('train_', 17 - ii) := start_date < test_start]
+    sprintf('train_%02d', ii) := start_date < test_start]
 }
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
@@ -482,5 +478,5 @@ for (train in train_variations) {
 }
 
 cat('PEI: ', scores[ , .(pei = mean(pei)), keyby = .(alpha, l1, l2)][ , max(pei)])
-ff = paste0("scores/", call.type, "_random_search.csv")
+ff = file.path("scores", start_str, paste0(call.type, "_random_search.csv"))
 fwrite(scores, ff, append = file.exists(ff))

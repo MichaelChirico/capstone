@@ -6,6 +6,23 @@ library(data.table, warn.conflicts = FALSE, quietly = TRUE)
 library(maptools)
 library(rBayesianOptimization)
 
+#character(0) if run in live RStudio session
+args = commandArgs(trailingOnly = TRUE)
+if (!length(args)) {
+  # integer version of Mar. 1, 2017
+  forecast_start = 17226L
+  start_str = '20170301'
+  bo_file = 'scores/20170301/bo_runs.csv'
+  cat("**********************\n",
+      "* TEST PARAMETERS ON *\n",
+      "**********************\n")
+} else {
+  forecast_start = 
+    unclass(as.IDate(commandArgs(trailingOnly = TRUE)[1L],
+                     format = '%Y%m%d'))
+  bo_file = file.path("scores", start_str, "bo_runs.csv")
+}
+
 #rotation formula, relative to a point (x_0, y_0) that's not origin:
 #  [x_0, y_0] + R * [x - x_0, y - y_0]
 #  (i.e., rotate the distances from (x_0, y_0) about that point,
@@ -48,8 +65,7 @@ which.round = function(x)
   if (x > 0) {if (x < 1) round else floor} else ceiling
 
 evaluate_pei = function(delx, dely, eta, lt, theta, k,
-                        kde.bw, kde.lags, kde.win, call.type) {
-  cat('start\n')
+                        kde.bw, kde.lags, kde.win) {
   #from random.org
   set.seed(19775046)
 
@@ -74,14 +90,12 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
                poly = seattle, h0 = kde.bw, grd = grdtop)[incl_ids]
   }
   
-  incl_mos = c(10L, 11L, 12L, 1L, 2L, 3L)
-  
   aa = delx*dely #forecasted area
   lx = eta*250
   ly = eta*250
   
   #these files created with get_data notebook
-  calls = fread(paste0(call.type, '.csv'))
+  calls = fread('fire.csv')
   calls[ , date := as.IDate(date)]
   
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
@@ -157,18 +171,14 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   ##   competition forecasting horizon
   
   # how long is one period for this horizon?
-  #   NB: these are not great approximations
-  #       of the horizon lengths, but what is
-  #       crucial is to line up with the
-  #       ultimate forecasting horizons,
-  #       e.g. 1m is March 1 - 31
   pd_length = 7L
   # how many periods are there in one year for this horizon?
   one_year = 52L
-  # *** TO DO ***
-  # how many total periods are there in the data?
-  #   2013/14/15/16/(17), though 17 not used here
-  n_pds = 5L*one_year
+  half_year = 26L
+  yr_length = one_year * pd_length
+  
+  # count the number of training periods
+  n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
   
   #actually easier/quicker to deal with
   #  integer representation of the dates
@@ -176,17 +186,19 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #all dates on which an event occurred
   unq_crimes = calls[ , unique(date_int)]
   
-  march117 = unclass(as.IDate('2017-03-01'))
-  #all possible period start dates
-  start = march117 - (seq_len(n_pds) - 1L) * pd_length
-  #eliminate irrelevant (summer) data
-  #  and non-testable data after testing dates in 2016
-  start = start[month(as.IDate(start, origin = '1970-01-01')) %in% incl_mos & 
-                  start <= march117 - one_year*pd_length]
-  #all period end dates (nonoverlapping with starts)
-  end = start + pd_length - 1L
-  #for feeding to foverlaps
-  windows = data.table(start, end, key = 'start,end')
+  #all possible period start dates --
+  #  the half_year periods preceding the yr_start for each of
+  #  the n_train periods in the _training_ data;
+  #  yr_start is built from the input parameter start_str
+  start = c(sapply(forecast_start - seq_len(n_train) * yr_length,
+                   function(yr_start) yr_start - 
+                     (seq_len(half_year) - 1L) * pd_length))
+  #windows for feeding to foverlaps to assign a start_date
+  #  to each unique event occurrence date
+  windows = 
+    #all period end dates (nonoverlapping with starts)
+    data.table(start, end = start + pd_length - 1L,
+               key = 'start,end')
   
   call_start_map = data.table(date_int = unq_crimes)
   call_start_map[ , start_date := 
@@ -207,13 +219,12 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     #subset to eliminate never-crime cells
     keyby = start_date][ , I := rowid(start_date)][I %in% incl_ids]
   
-  ## *** TO DO ***
-  #Use four holdout periods -- one for each possible
+  #Use multiple holdout periods -- one for each possible
   #  year -- to stabilize jumpy prediction validity
-  for (ii in 1:4) {
-    test_start = march117 - ii * one_year*pd_length
+  for (ii in seq_len(n_train)) {
+    test_start = forecast_start - ii * one_year*pd_length
     X[start_date <= test_start, 
-      paste0('train_', 17 - ii) := start_date < test_start]
+      sprintf('train_%02d', ii) := start_date < test_start]
   }
   
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
@@ -293,7 +304,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
         lapply(incl.kde, coln_to_vw),
         list(rff_namespace = '|rff'))
     }]
-  cat('added features\n')
+  
   if (k == 0) phi.dt[ , rff_namespace := NULL]
   #about to assign a lot of columns using set --
   #  will fail if we don't warn data.table that
@@ -351,7 +362,6 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #for easy/clean updating syntax
   setkey(scores, train_set, alpha, l1, l2)
   
-  cat('starting training\n')
   #loop over using each year's holdout test set to calculate PEI/PAI
   for (train in train_variations) {
     #these are the test data
@@ -359,8 +369,8 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     
     #temporary files -- include lots of
     #  potential debugging info in the file name
-    filename = paste('arws', train, call.type, delx,
-                     dely, eta, lt, theta, k, kde.bw,
+    filename = paste('arws', train, delx, dely,
+                     eta, lt, theta, k, kde.bw,
                      kde.lags, kde.win, sep = '_')
     #write the training data to:
     train.vw = paste0(tdir, '/train_', filename)
@@ -457,80 +467,54 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     invisible(file.remove(cache, test.vw))
   }
   
-  cat('done training\n')
-  best_pei = scores[ , .(pei = mean(pei)), keyby = .(alpha, l1, l2)][ , max(pei)]
-  ff = paste0("scores/", call.type, "_bo_runs.csv")
-  fwrite(scores, ff, append = file.exists(ff))
-  return(list(Score = best_pei, Pred = 0))
+  #exponentially discounted weighted average mutes
+  #  the influence of earlier years in favor of
+  #  more recent training sets to allow for trend evolution;
+  #  not normalizing since the argmax is unaffected
+  best_pei_wtd = scores[ , .(pei = sum(.95^seq_len(.N) * pei)), 
+                         keyby = .(alpha, l1, l2)][ , max(pei)]
+  fwrite(scores, bo_file, append = file.exists(bo_file))
+  return(list(Score = best_pei_wtd, Pred = 0))
 }
 
-evaluate_pei_fire = function(delx, dely, eta, lt, theta, k,
-                             kde.bw, kde.lags, kde.win) {
-	cat('HELLOOOOO\n')
-  evaluate_pei(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, 'fire')
-}
+prior_wk = 
+  file.path('scores',
+            format(as.IDate(forecast_start - 7L,
+                            origin = '1970-01-01'), '%Y%m%d'),
+            'bo_runs.csv')
 
-evaluate_pei_medical = function(delx, dely, eta, lt, theta, k,
-                                kde.bw, kde.lags, kde.win) {
-  evaluate_pei(delx, dely, eta, lt, theta, k, kde.bw, kde.lags, kde.win, 'medical')
-}
-
-fire_random = fread('scores/fire_random_search.csv')
-fire_random = 
-  fire_random[ , .(Value = max(pei)),
-              keyby = .(delx, dely, eta, lt, theta, k, 
-                        kde.bw, kde.lags, kde.win)]
-# fire_kde = fread('scores/fire_kde_only.csv')
-# fire_kde = 
-#   fire_kde[ , .(Value = max(pei)),
-#            keyby = .(delx, dely, eta, lt, theta, k, 
-#                      kde.bw, kde.lags, kde.win)]
-if (file.exists('scores/fire_bo_runs.csv')) {
-  fire_bo = fread('scores/fire_bo_runs.csv')
-  fire_bo = 
-    fire_bo[ , .(Value = max(pei)),
-            keyby = .(delx, dely, eta, lt, theta, k, 
-                      kde.bw, kde.lags, kde.win)]
-  initial_scores_fire = rbind(fire_random, fire_bo)[k <= 150]
-  #initial_scores_fire = rbind(fire_random, fire_kde, fire_bo)[k <= 150]
+all_params = c('delx', 'dely', 'eta', 'lt', 'theta', 'k',
+               'kde.bw', 'kde.lags', 'kde.win')
+if (file.exists(bo_file)) {
+  current = fread(bo_file)
+  current = current[ , .(Value = max(pei)), keyby = all_params]
 } else {
-  #initial_scores_fire = rbind(fire_random, fire_kde)[k <= 150]
-  initial_scores_fire = fire_random
+  current = data.table()
 }
 
-medical_random = fread('scores/medical_random_search.csv')
-medical_random = 
-  medical_random[ , .(Value = max(pei)),
-                 keyby = .(delx, dely, eta, lt, theta, k, 
-                           kde.bw, kde.lags, kde.win)]
-medical_kde = fread('scores/medical_kde_only.csv')
-medical_kde = 
-  medical_kde[ , .(Value = max(pei)),
-              keyby = .(delx, dely, eta, lt, theta, k, 
-                        kde.bw, kde.lags, kde.win)]
-if (file.exists('scores/medical_bo_runs.csv')) {
-  medical_bo = fread('scores/medical_bo_runs.csv')
-  medical_bo = 
-    medical_bo[ , .(Value = max(pei)),
-               keyby = .(delx, dely, eta, lt, theta, k, 
-                         kde.bw, kde.lags, kde.win)]
-  initial_scores_medical = rbind(medical_random, medical_bo)[k <= 150]
-  #initial_scores_medical = rbind(medical_random, medical_kde, medical_bo)[k <= 150]
+if (file.exists(prior_wk)) {
+  old = fread(prior_wk)
+  old = old[ , .(Value = max(pei)), keyby = all_params
+             #take top 20 parameter sets from prior week
+             ][order(-Value)[1:20]]
+  #blank the score for these parameters to force
+  #  BO to re-calculate scores for these parameters
+  old[ , Value := NA_real_]
 } else {
-  initial_scores_medical = medical_random
-  #initial_scores_medical = rbind(medical_random, medical_kde)[k <= 150]
+  old = data.table()
 }
+
+# if current PEI values have been calculated for the old
+#   best already, no need to re-calculate them
+initial_scores = unique(rbind(current, old), by = all_params)
 
 bounds = list(delx = c(125, 800), dely = c(125, 800),
               eta = c(.5, 1.5), lt = c(3, 30),
               theta = c(0, pi), k = c(0L, 150L),
-              kde.bw = c(125, 800), kde.lags = c(1L, 6L), kde.win = c(3L, 14L))
+              kde.bw = c(125, 800), kde.lags = c(1L, 6L),
+              kde.win = c(3L, 14L))
 
-fire_opt = BayesianOptimization(evaluate_pei_fire, bounds,
-                                initial_scores_fire, 
+fire_opt = BayesianOptimization(evaluate_pei, bounds,
+                                initial_scores, 
                                 n_iter = 50, verbose = TRUE)
-save(fire_opt, 'BO_output_fire')
-medical_opt = BayesianOptimization(evaluate_pei_medical, bounds,
-                                   initial_scores_medical, 
-                                   n_iter = 50, verbose = TRUE)
-save(medical_opt, 'BO_output_medical')
+save(fire_opt, paste0('BO_output_', start_str))
