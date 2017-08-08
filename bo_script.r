@@ -185,12 +185,20 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   
   # count the number of training periods
   n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
+  #only include a training year if all prior periods
+  #  are available for testing
+  earliest_week = forecast_start - n_train * yr_length - 
+    half_year * pd_length + c(0, 6)
+  if (!nrow(calls[date %between% earliest_week])) {
+    n_train = n_train - 1L
+  }
+  
   
   #actually easier/quicker to deal with
   #  integer representation of the dates
   calls[ , date_int := unclass(date)]
   #all dates on which an event occurred
-  unq_crimes = calls[ , unique(date_int)]
+  unq_dates = calls[ , unique(date_int)]
   
   #all possible period start dates --
   #  the half_year periods preceding the yr_start for each of
@@ -206,7 +214,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     data.table(start, end = start + pd_length - 1L,
                key = 'start,end')
   
-  call_start_map = data.table(date_int = unq_crimes)
+  call_start_map = data.table(date_int = unq_dates)
   call_start_map[ , start_date := 
                     foverlaps(data.table(start = date_int, 
                                          end = date_int),
@@ -224,6 +232,18 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
     eps = c(x = delx, dely)))[idx.new],
     #subset to eliminate never-crime cells
     keyby = start_date][ , I := rowid(start_date)][I %in% incl_ids]
+  
+  # need to splice in rows for internally
+  #   missing start dates, if necessary
+  all_start_i = CJ(start_date = start, I = incl_ids)
+  X = X[all_start_i, on = c('start_date', 'I')]
+  # missing means no events; would have needed
+  #   to have supplied a zero-row data.table to
+  #   ppp in order to have done this above 
+  X[is.na(value), value := 0]
+  X[is.na(x), c('x', 'y') :=
+      unique(X[!is.na(x)], by = 'I')[.SD, .(x.x, x.y),  on = 'I']]
+  
   
   #Use multiple holdout periods -- one for each possible
   #  year -- to stabilize jumpy prediction validity
@@ -248,19 +268,21 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   calls.sp@data = setDT(calls.sp@data)
   setkey(calls.sp@data, date_int)
   
-  #start_lag facilitates using within-group lapply
-  #  in the next command, see below
-  start_lag = CJ(start = start, lag = seq_len(kde.lags))
+  #get 1, ..., n named as lag01, ..., lag0n
+  #  to facilitate adding pre-named columns
+  lag_list = seq_len(kde.lags)
+  names(lag_list) = sprintf('lag%02d', lag_list)
   
   #for up through kde.lags total lags to include,
   #  compute the associated KDE and add it as a
   #  column associated with the grid cell;
   #  do this by start_date to complete
   #  the lagged-KDE specification on the RHS of the model
-  RHS = start_lag[ , 
-                   c(I = list(incl_ids),
-                     lapply(setNames(lag, paste0('lag', lag)), compute.kde,
-                            pts = calls.sp, start = .BY$start)), by = start]
+  RHS = data.table(start)[ , 
+                           c(I = list(incl_ids),
+                             lapply(lag_list, compute.kde,
+                                    pts = calls.sp, start = .BY$start)),
+                           by = start]  
   
   #join to our main data.table
   X = X[RHS, on = c(start_date = 'start', 'I')]
