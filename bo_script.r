@@ -44,7 +44,7 @@ rotate = function(x, y, theta, origin)
 #  column vectors of coordinates
 RT = function(theta) matrix(c(cos(theta), -sin(theta), 
                               sin(theta), cos(theta)), 
-                              nrow = 2L, ncol = 2L)
+                            nrow = 2L, ncol = 2L)
 
 getGTindices <- function(gt) {
   # Obtain indices to rearange data from image (eg. result frim pixellate)
@@ -57,7 +57,7 @@ getGTindices <- function(gt) {
   c(matrix(seq_len(dimx*dimy), ncol = dimy, byrow = TRUE)[ , dimy:1L])
 }
 
-  # create sp object of crimes
+# create sp object of crimes
 to.spdf = function(DT) {
   SpatialPointsDataFrame(
     coords = DT[ , cbind(x_lon, y_lat)],
@@ -75,7 +75,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
                         kde.bw, kde.lags, kde.win) {
   #from random.org
   set.seed(19775046)
-
+  
   #Given a SpatialPointsDF, a start_date,
   #  and a lag number, calculate the
   #  KDE corresponding to the kde.win
@@ -108,7 +108,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
   # ROTATION ----
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
-    
+  
   #use the lower-left corner of data as the origin
   #  through which to rotate
   #  (side-effect -- the same theta on different
@@ -180,9 +180,8 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   # how long is one period for this horizon?
   pd_length = 7L
   # how many periods are there in one year for this horizon?
-  one_year = 52L
   half_year = 26L
-  yr_length = one_year * pd_length
+  yr_length = 2L * half_year * pd_length
   
   # count the number of training periods
   n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
@@ -228,10 +227,14 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   
   #Use multiple holdout periods -- one for each possible
   #  year -- to stabilize jumpy prediction validity
-  for (ii in seq_len(n_train)) {
-    test_start = forecast_start - ii * one_year*pd_length
-    X[start_date <= test_start, 
-      sprintf('train_%02d', ii) := start_date < test_start]
+  for (ii in seq_len(n_train)) { 
+    test_start = forecast_start - ii * yr_length
+    # done indirectly to guard against adding a column
+    #   for a year in history lacking the right training period
+    idx = X[start_date <= test_start, which = TRUE]
+    if (length(idx)) {
+      X[idx, sprintf('train_%02d', ii) := start_date < test_start]
+    }
   }
   
   # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
@@ -244,7 +247,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #  to leverage good DT internals
   calls.sp@data = setDT(calls.sp@data)
   setkey(calls.sp@data, date_int)
-    
+  
   #start_lag facilitates using within-group lapply
   #  in the next command, see below
   start_lag = CJ(start = start, lag = seq_len(kde.lags))
@@ -353,7 +356,7 @@ evaluate_pei = function(delx, dely, eta, lt, theta, k,
   #  creation to do so
   l1s = l2s = c(0, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3)
   vw_variations = CJ(l1 = l1s, l2 = l2s)
-    
+  
   #for storing the output, taking care to
   #  store things in the correct order
   #  relative to our work flow

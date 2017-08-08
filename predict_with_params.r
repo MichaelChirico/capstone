@@ -15,11 +15,11 @@ set.seed(19775046)
   !FALSE
 if (..testing) {
   #set of parameters that run quickly for testing
-  delx=600; dely=600
-  eta=1; lt=14; theta=0.91806921873
-  features=0; kde.bw=500; 
-  kde.lags=1; kde.win = 7
-  call.type='fire', start_str='20170301'
+  delx=608; dely=621
+  eta=1.09; lt=25; theta=1.76
+  features=39; kde.bw=496; 
+  kde.lags=3; kde.win = 13
+  call.type='fire'; start_str='20170308'
   cat("**********************\n",
       "* TEST PARAMETERS ON *\n",
       "**********************\n")
@@ -148,11 +148,11 @@ incl_ids =
 # how long is one period for this horizon?
 pd_length = 7L
 # how many periods are there in one year for this horizon?
-one_year = 52L
 half_year = 26L
-yr_length = one_year * pd_length
+yr_length = 2 * half_year * pd_length
 
 # count the number of training periods
+forecast_start = unclass(as.IDate(start_str, format = '%Y%m%d'))
 n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
 
 #actually easier/quicker to deal with
@@ -161,7 +161,6 @@ calls[ , date_int := unclass(date)]
 #all dates on which an event occurred
 unq_crimes = calls[ , unique(date_int)]
 
-forecast_start = unclass(as.IDate(start_str, format = '%Y%m%d'))
 #all possible period start dates --
 #  the half_year periods preceding the yr_start for each of
 #  the n_train periods in the _training_ data;
@@ -197,10 +196,14 @@ X = calls[!is.na(start_date), as.data.table(pixellate(ppp(
 
 #Use multiple holdout periods -- one for each possible
 #  year -- to stabilize jumpy prediction validity
-for (ii in seq_len(n_trainL)) {
-  test_start = forecast_start - ii * one_year*pd_length
-  X[start_date <= test_start, 
-    sprintf('train_%02d', ii) := start_date < test_start]
+for (ii in seq_len(n_train)) {
+  test_start = forecast_start - ii * yr_length
+  # done indirectly to guard against adding a column
+  #   for a year in history lacking the right training period
+  idx = X[start_date <= test_start, which = TRUE]
+  if (length(idx)) {
+    X[idx, sprintf('train_%02d', ii) := start_date < test_start]
+  }
 }
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
