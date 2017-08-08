@@ -15,10 +15,11 @@ set.seed(19775046)
   !FALSE
 if (..testing) {
   #set of parameters that run quickly for testing
-  delx=608; dely=621
-  eta=1.09; lt=25; theta=1.76
-  features=39; kde.bw=496; 
-  kde.lags=3; kde.win = 13
+  delx=694.6816; dely = 405.8898
+  eta = 1.037909; lt = 24.99543;
+  theta = 2.982843; features = 136
+  kde.bw = 564.3679
+  kde.lags = 4; kde.win = 10
   call.type='fire'; start_str='20170308'
   cat("**********************\n",
       "* TEST PARAMETERS ON *\n",
