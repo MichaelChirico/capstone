@@ -21,6 +21,8 @@ if (!length(args)) {
     unclass(as.IDate(commandArgs(trailingOnly = TRUE)[1L],
                      format = '%Y%m%d'))
   bo_file = file.path("scores", start_str, "bo_runs.csv")
+  dir.create(file.path('scores', start_str),
+             showWarnings = FALSE)
 }
 
 #rotation formula, relative to a point (x_0, y_0) that's not origin:
