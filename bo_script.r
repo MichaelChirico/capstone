@@ -13,6 +13,11 @@ if (!length(args)) {
   forecast_start = 17226L
   start_str = '20170301'
   bo_file = 'scores/20170301/bo_runs.csv'
+  forecast_start = 17233L
+  start_str = '20170308'
+  bo_file = 'scores/20170308/bo_runs.csv'
+  dir.create(file.path('scores', start_str),
+             showWarnings = FALSE)
   cat("**********************\n",
       "* TEST PARAMETERS ON *\n",
       "**********************\n")
@@ -501,7 +506,7 @@ if (file.exists(prior_wk)) {
              ][order(-Value)[1:20]]
   #blank the score for these parameters to force
   #  BO to re-calculate scores for these parameters
-  old[ , Value := NA_real_]
+  old[ , Value := -Inf]
 } else {
   old = data.table()
 }
