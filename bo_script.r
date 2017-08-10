@@ -73,6 +73,11 @@ which.round = function(x)
 
 evaluate_pei = function(delx, dely, eta, lt, theta, k,
                         kde.bw, kde.lags, kde.win) {
+  cat(delx, dely, eta, lt, theta, k,
+      kde.bw, kde.lags, kde.win, '\n',
+      sep = '/', file = 'now.trying',
+      append = file.exists('now.trying'))
+  if (k > 100) k = 100
   #from random.org
   set.seed(19775046)
   
@@ -548,7 +553,7 @@ initial_scores = unique(rbind(current, old), by = all_params)
 
 bounds = list(delx = c(125, 800), dely = c(125, 800),
               eta = c(.5, 1.5), lt = c(3, 30),
-              theta = c(0, pi), k = c(0L, 150L),
+              theta = c(0, pi), k = c(0L, 100L),
               kde.bw = c(125, 800), kde.lags = c(1L, 6L),
               kde.win = c(3L, 14L))
 
