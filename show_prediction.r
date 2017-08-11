@@ -154,7 +154,7 @@ yr_length = 2 * half_year * pd_length
 
 # count the number of training periods
 forecast_start = unclass(as.IDate(start_str, format = '%Y%m%d'))
-n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
+n_train = uniqueN(year(calls[date <= forecast_start, date]))
 #only include a training year if all prior periods
 #  are available for testing
 earliest_week = forecast_start - n_train * yr_length - 
@@ -173,7 +173,7 @@ unq_dates = calls[ , unique(date_int)]
 #  the half_year periods preceding the yr_start for each of
 #  the n_train periods in the _training_ data;
 #  yr_start is built from the input parameter start_str
-start = c(sapply(forecast_start - seq_len(n_train) * yr_length,
+start = c(sapply(forecast_start - (seq_len(n_train) - 1L) * yr_length,
                  function(yr_start) yr_start - 
                    (seq_len(half_year) - 1L) * pd_length))
 #windows for feeding to foverlaps to assign a start_date
