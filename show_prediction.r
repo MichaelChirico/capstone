@@ -1,3 +1,4 @@
+#!/usr/bin/env Rscript
 library(spatstat, quietly = TRUE)
 library(splancs, quietly = TRUE)
 library(rgeos)
@@ -8,20 +9,42 @@ library(maptools)
 #from random.org
 set.seed(19775046)
 
-delx = 607.908596915976; dely = 620.742535363564; 
-alpha = 0.263157894736842; eta = 1.08594374790609; 
-lt = 24.9125476663891; theta = 1.75891299661207;
-features = 39; l1 = 0; l2 = 0; kde.bw = 496.257052984183; 
-kde.lags = 3; kde.win = 13; call.type = 'fire'
+#add/remove ! below to turn testing on/off
+..testing = 
+  !FALSE
+if (..testing) {
+  #set of parameters that run quickly for testing
+  delx = 607.908596915976; dely = 620.742535363564
+  alpha = 0.263157894736842; eta = 1.08594374790609
+  lt = 24.9125476663891; theta = 1.75891299661207
+  features = 39; l1 = 0; l2 = 0
+  kde.bw = 496.257052984183; kde.lags = 3
+  kde.win = 13; start_str = '20170301'
+  cat("**********************\n",
+      "* TEST PARAMETERS ON *\n",
+      "**********************\n")
+} else {
+  # each argument read in as a string in a character vector;
+  # would rather have them as a list. basically do
+  # that by converting them to a form read.table
+  # understands and then attaching from a data.frame
+  args = read.table(text = paste(commandArgs(trailingOnly = TRUE),
+                                 collapse = '\t'),
+                    stringsAsFactors = FALSE)
+  names(args) =
+    c('delx', 'dely', 'alpha', 'eta', 'lt', 'theta', 
+      'features', 'l1', 'l2', 'kde.bw', 'kde.lags',
+      'kde.win', 'call.type', 'start_str')
+  attach(args)
+}
 
-incl_mos = c(10L, 11L, 12L, 1L, 2L, 3L)
 
 aa = delx*dely #forecasted area
 lx = eta*250
 ly = eta*250
 
 #these files created with get_data notebook
-calls = fread(paste0(call.type, '.csv'))
+calls = fread('fire.csv')
 calls[ , date := as.IDate(date)]
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
@@ -124,42 +147,48 @@ incl_ids =
 ##   competition forecasting horizon
 
 # how long is one period for this horizon?
-#   NB: these are not great approximations
-#       of the horizon lengths, but what is
-#       crucial is to line up with the
-#       ultimate forecasting horizons,
-#       e.g. 1m is March 1 - 31
 pd_length = 7L
 # how many periods are there in one year for this horizon?
-one_year = 52L
-# *** TO DO ***
-# how many total periods are there in the data?
-#   2013/14/15/16/(17), though 17 not used here
-n_pds = one_year
+half_year = 26L
+yr_length = 2 * half_year * pd_length
+
+# count the number of training periods
+forecast_start = unclass(as.IDate(start_str, format = '%Y%m%d'))
+n_train = uniqueN(year(calls[date <= forecast_start, date])) - 1L
+#only include a training year if all prior periods
+#  are available for testing
+earliest_week = forecast_start - n_train * yr_length - 
+  half_year * pd_length + c(0, 6)
+if (!nrow(calls[date %between% earliest_week])) {
+  n_train = n_train - 1L
+}
 
 #actually easier/quicker to deal with
 #  integer representation of the dates
 calls[ , date_int := unclass(date)]
 #all dates on which an event occurred
-unq_crimes = calls[ , unique(date_int)]
+unq_dates = calls[ , unique(date_int)]
 
-march117 = unclass(as.IDate('2017-03-01'))
-#all possible period start dates
-start = march117 - (seq_len(n_pds) - 1L) * pd_length
-#eliminate irrelevant (summer) data
-#  and non-testable data after testing dates in 2016
-start = start[month(as.IDate(start, origin = '1970-01-01')) %in% incl_mos & 
-                start <= march117]
-#all period end dates (nonoverlapping with starts)
-end = start + pd_length - 1L
-#for feeding to foverlaps
-windows = data.table(start, end, key = 'start,end')
+#all possible period start dates --
+#  the half_year periods preceding the yr_start for each of
+#  the n_train periods in the _training_ data;
+#  yr_start is built from the input parameter start_str
+start = c(sapply(forecast_start - seq_len(n_train) * yr_length,
+                 function(yr_start) yr_start - 
+                   (seq_len(half_year) - 1L) * pd_length))
+#windows for feeding to foverlaps to assign a start_date
+#  to each unique event occurrence date
+windows = 
+  #all period end dates (nonoverlapping with starts)
+  data.table(start, end = start + pd_length - 1L,
+             key = 'start,end')
 
-call_start_map = data.table(date_int = unq_crimes)
+call_start_map = data.table(date_int = unq_dates)
 call_start_map[ , start_date := 
                    foverlaps(data.table(start = date_int, 
                                         end = date_int),
                              windows)$start]
+call_start_map = call_start_map[!is.na(start_date)]
 
 #finally, add the interval start date associated with
 #  each date of occurrence
@@ -174,7 +203,18 @@ X = calls[!is.na(start_date), as.data.table(pixellate(ppp(
   #subset to eliminate never-crime cells
   keyby = start_date][ , I := rowid(start_date)][I %in% incl_ids]
 
-X[ , train_17 := start_date < march117]
+# need to splice in rows for internally
+#   missing start dates, if necessary
+all_start_i = CJ(start_date = start, I = incl_ids)
+X = X[all_start_i, on = c('start_date', 'I')]
+# missing means no events; would have needed
+#   to have supplied a zero-row data.table to
+#   ppp in order to have done this above 
+X[is.na(value), value := 0]
+X[is.na(x), c('x', 'y') :=
+    unique(X[!is.na(x)], by = 'I')[.SD, .(x.x, x.y),  on = 'I']]
+
+X[ , train_17 := start_date < forecast_start]
 
 # <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>=
 # Add lagged KDE covariates
@@ -323,8 +363,8 @@ test_idx = !X$train_17
 
 #temporary files -- include lots of
 #  potential debugging info in the file name
-filename = paste('arws', call.type, delx,
-                 dely, eta, lt, theta, features, kde.bw,
+filename = paste('arws', delx, dely, eta, lt,
+                 theta, features, kde.bw,
                  kde.lags, kde.win, sep = '_')
 #write the training data to:
 train.vw = paste0(tdir, '/train_', filename)
@@ -417,7 +457,34 @@ grdSPDF =
   )
 proj4string(grdSPDF) = prj
 
-writeOGR(grdSPDF, dsn = '.', layer = 'rff_pred_plot', 
-         driver = 'ESRI Shapefile')
+horiz = as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L)
+actu_pts = SpatialPoints(
+  calls.sp[date %between% horiz, 
+           cbind(x_lon, y_lat)],
+    proj4string = prj
+)
 
-spplot(grdSPDF, zcol = 'pred.count', col.regions = viridis(64))
+seattle = readOGR('data', 'Neighborhoods')
+down_idx = with(seattle@data, !is.na(L_HOOD) & L_HOOD == 'DOWNTOWN')
+seattle_down = gUnaryUnion(seattle[down_idx, ])
+seattle_down = spTransform(seattle_down, prj)
+
+grdDown = 
+  SpatialPolygonsDataFrame(
+    gIntersection(grdSPDF, seattle_down, byid = TRUE),
+    data = grdSPDF@data[gIntersects(grdSPDF, seattle_down, byid = TRUE), ],
+    match.ID = FALSE
+  )
+cell_counts = as.data.frame(table((actu_pts %over% grdSPDF)$I))
+
+grdSPDF = merge(grdSPDF, cell_counts, by.x = 'I', by.y = 'Var1', all.x = TRUE)
+grdSPDF@data[is.na(grdSPDF$Freq), 'Freq'] = 0
+
+pdf('comparison.pdf')
+print(spplot(grdSPDF, zcol = 'prd_cnt', col.regions = viridis(64),
+       main = 'Implied Intensity Surface\nMarch 1-7, 2017 (test set)'),
+      split=c(1, 1, 2, 1), more = TRUE) 
+print(spplot(preds, zcol = 'actual_count', col.regions = viridis(64),
+       main = 'Observed Fire Incidence\nMarch1-7, 2017 (Ground Truth)'),
+      split=c(2, 1, 2, 1), more = FALSE) 
+dev.off()
