@@ -1,16 +1,5 @@
 library(shiny)
 
-wks = c('20170301', '20170308', '20170315', '20170322')
-url_wk = setNames(rep('http', 4L), wks)
-URLs = list()
-URLs$pred_full = url_wk
-url_wk[wks] = ''
-URLs$actu_full = url_wk
-url_wk[wks] = ''
-URLs$pred_down = url_wk
-url_wk[wks] = ''
-URLs$actu_down = url_wk
-
 ui <- shinyUI(fluidPage(
   titlePanel("Predicted Weekly Fire Locations in Seattle"),
   fluidRow(column(6, plotOutput("pred_full", height = "600px")),
@@ -32,19 +21,19 @@ ui <- shinyUI(fluidPage(
 server <- shinyServer(function(input, output) {
   output$trajectory <- renderPlot(traj_yr(input$yr))
   output$pred_full <- renderImage(
-    list(src = URLs[["pred_full"]][input$wk],
+    list(src = paste0('./images/pred_all_', input$wk, '.png'),
          alt = "Predictions for All of Seattle")
   )
   output$actu_full <- renderImage(
-    list(src = URLs[["actu_full"]][input$wk],
+    list(src = paste0('./images/actu_all_', input$wk, '.png'),
          alt = "Actual Hotspots for All of Seattle")
   )
   output$pred_down <- renderImage(
-    list(src = URLs[["pred_down"]][input$wk],
+    list(src = paste0('./images/pred_dwn_', input$wk, '.png'),
          alt = "Predictions for Downtown Seattle")
   )
   output$actu_down <- renderImage(
-    list(src = URLs[["actu_down"]][input$wk],
+    list(src = paste0('./images/actu_dwn_', input$wk, '.png'),
          alt = "Actual Hotspots for Downtown Seattle")
   )
 })
