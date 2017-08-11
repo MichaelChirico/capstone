@@ -440,25 +440,21 @@ cat('elision\n')
 grdSPDF = elide(grdSPDF, rotate = 180/pi * theta,
                 center = point0)
 
-grdSPDF@data = setDT(grdSPDF@data)
-grdSPDF$pred.count = 0
-grdSPDF@data[X, pred.count := i.pred.count, on = 'I']
+grdSPDF = merge(grdSPDF, X, by = 'I', all.x = TRUE)
+grdSPDF[is.na(grdSPDF$pred.count), 'pred.count'] = 0
+proj4string(grdSPDF) = prj
 
-grdSPDF$hotspot_pred = grdSPDF$I %in% X[rank <= n.cells, I]
-grdSPDF$hotspot_actu = grdSPDF$I %in% X[true_rank <= n.cells, I]
-
-grdSPDF@data = setDF(grdSPDF@data)
+cat('clipping\n')
 grdSPDF = 
   SpatialPolygonsDataFrame(
     gIntersection(grdSPDF, seattle, byid = TRUE),
     data = grdSPDF@data[gIntersects(grdSPDF, seattle, byid = TRUE), ],
     match.ID = FALSE
   )
-proj4string(grdSPDF) = prj
 
 test_calls = 
   calls.sp[calls.sp$date %between% 
-             as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L), ]
+             (as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L)), ]
 
 seattle = spTransform(readOGR('data', 'Neighborhoods'), prj)
 
