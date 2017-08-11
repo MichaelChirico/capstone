@@ -11,9 +11,8 @@ library(viridis)
 set.seed(19775046)
 
 #add/remove ! below to turn testing on/off
-..testing = 
-  !FALSE
-if (..testing) {
+args = commandArgs(trailingOnly = TRUE)
+if (!length(args)) {
   #set of parameters that run quickly for testing
   delx = 607.908596915976; dely = 620.742535363564
   alpha = 0.263157894736842; eta = 1.08594374790609
@@ -29,8 +28,7 @@ if (..testing) {
   # would rather have them as a list. basically do
   # that by converting them to a form read.table
   # understands and then attaching from a data.frame
-  args = read.table(text = paste(commandArgs(trailingOnly = TRUE),
-                                 collapse = '\t'),
+  args = read.table(text = paste(args, collapse = '\t'),
                     stringsAsFactors = FALSE)
   names(args) =
     c('delx', 'dely', 'alpha', 'eta', 'lt', 'theta', 
