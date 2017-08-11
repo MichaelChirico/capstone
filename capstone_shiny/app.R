@@ -30,6 +30,18 @@ ui <- shinyUI(fluidPage(
                "are discovered using Bayesian Optimization."
              )),
              p(paste(
+               "The data used in this process consists of",
+               "geospatially tagged and categorized 911 events",
+               "provided in a log by the Seattle Fire Department.",
+               "This data was filtered to exclude events lying",
+               "outside Seattle's city limits and to focus on",
+               "fire-related events (the data also includes",
+               "medical emergencies). A few events in the log were",
+               "also missing geospatial information or had",
+               "mal-formed time labels. In total, there are",
+               "roughly 90,000 fire events in 7 years of data."
+             )),
+             p(paste(
                "Note: This technique was debuted by Team",
                "Kernel Glitches (myself, Seth Flaxman, Charles",
                "Loeffler, and Pau Pereira-Batlle) in our",
