@@ -336,6 +336,7 @@ if (features > 500L) invisible(alloc.col(phi.dt, 3L*features))
 #  but this _appears_ to be slower than implicitly
 #  creating this as below by taking sin/cos 
 #  simultaneously with assigning to phi.dt.
+cat('adding features\n')
 fkt = 1/sqrt(features)
 for (jj in seq_len(features)) {
   pj = proj[ , jj]
@@ -367,20 +368,21 @@ filename = paste('arws', delx, dely, eta, lt,
                  theta, features, kde.bw,
                  kde.lags, kde.win, sep = '_')
 #write the training data to:
-train.vw = paste0(tdir, '/train_', filename)
+train.vw = tempfile(tmpdir = tdir)
 #write the test data to:
-test.vw = paste0(tdir,'/test_', filename)
+test.vw = tempfile(tmpdir = tdir)
 #simply append .cache suffix to make it easier
 #  to track association when debugging
 cache = paste0(train.vw, '.cache')
 #write the predictions to:
-pred.vw = paste0(tdir, '/pred_', filename)
+pred.vw = tempfile(tmpdir = tdir)
 
 fwrite(phi.dt[!test_idx], train.vw,
        sep = " ", quote = FALSE, col.names = FALSE)
 fwrite(phi.dt[test_idx], test.vw,
        sep = " ", quote = FALSE, col.names = FALSE)
 rm(phi.dt)
+cat('starting vw\n')
 
 X = X[test_idx]
 NN = X[ , sum(value)]
@@ -390,10 +392,9 @@ model = tempfile(tmpdir = tdir, pattern = "model")
 call.vw = paste('vw --loss_function poisson --l1', l1, 
                 '--l2', l2, train.vw, '--cache_file', cache, 
                 '--passes 200 -f', model)
-system(call.vw, ignore.stderr = TRUE)
+system(call.vw)
 system(paste('vw -t -i', model, '-p', pred.vw,
-             test.vw, '--loss_function poisson'),
-       ignore.stderr = TRUE)
+             test.vw, '--loss_function poisson'))
 
 preds =
   fread(pred.vw, sep = " ", header = FALSE, col.names = c("pred", "I_start"))
