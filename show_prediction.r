@@ -5,6 +5,7 @@ library(rgeos)
 library(rgdal)
 library(data.table, warn.conflicts = FALSE, quietly = TRUE)
 library(maptools)
+library(viridis)
 
 #from random.org
 set.seed(19775046)
@@ -428,6 +429,7 @@ nn = X[rank <= n.cells, sum(value)]
 #PEI denominator -- total crimes in the TRUE top n.cells
 N_star = X[true_rank <= n.cells, sum(value)]
 
+cat('starting SP stuff\n')
 grdSPDF = SpatialPolygonsDataFrame(
   as.SpatialPolygons.GridTopology(grdtop, proj4string = prj),
   data = data.frame(I = seq_len(prod(grdtop@cells.dim)),
@@ -435,6 +437,7 @@ grdSPDF = SpatialPolygonsDataFrame(
   match.ID = FALSE
 )
 
+cat('elision\n')
 grdSPDF = elide(grdSPDF, rotate = 180/pi * theta,
                 center = point0)
 
@@ -445,10 +448,6 @@ grdSPDF@data[X, pred.count := i.pred.count, on = 'I']
 grdSPDF$hotspot_pred = grdSPDF$I %in% X[rank <= n.cells, I]
 grdSPDF$hotspot_actu = grdSPDF$I %in% X[true_rank <= n.cells, I]
 
-seattle = gUnaryUnion(
-  readOGR('data', 'Neighborhoods', verbose = FALSE)
-)
-
 grdSPDF@data = setDF(grdSPDF@data)
 grdSPDF = 
   SpatialPolygonsDataFrame(
@@ -458,17 +457,14 @@ grdSPDF =
   )
 proj4string(grdSPDF) = prj
 
-horiz = as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L)
-actu_pts = SpatialPoints(
-  calls.sp[date %between% horiz, 
-           cbind(x_lon, y_lat)],
-    proj4string = prj
-)
+test_calls = 
+  calls.sp[calls.sp$date %between% 
+             as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L), ]
 
-seattle = readOGR('data', 'Neighborhoods')
+seattle = spTransform(readOGR('data', 'Neighborhoods'), prj)
+
 down_idx = with(seattle@data, !is.na(L_HOOD) & L_HOOD == 'DOWNTOWN')
 seattle_down = gUnaryUnion(seattle[down_idx, ])
-seattle_down = spTransform(seattle_down, prj)
 
 grdDown = 
   SpatialPolygonsDataFrame(
@@ -476,16 +472,34 @@ grdDown =
     data = grdSPDF@data[gIntersects(grdSPDF, seattle_down, byid = TRUE), ],
     match.ID = FALSE
   )
-cell_counts = as.data.frame(table((actu_pts %over% grdSPDF)$I))
 
-grdSPDF = merge(grdSPDF, cell_counts, by.x = 'I', by.y = 'Var1', all.x = TRUE)
+cell_counts_all = as.data.frame(table((test_calls %over% grdSPDF)$I))
+
+grdSPDF = merge(grdSPDF, cell_counts_all, by.x = 'I', 
+                by.y = 'Var1', all.x = TRUE)
 grdSPDF@data[is.na(grdSPDF$Freq), 'Freq'] = 0
 
-pdf('comparison.pdf')
-print(spplot(grdSPDF, zcol = 'prd_cnt', col.regions = viridis(64),
-       main = 'Implied Intensity Surface\nMarch 1-7, 2017 (test set)'),
-      split=c(1, 1, 2, 1), more = TRUE) 
-print(spplot(preds, zcol = 'actual_count', col.regions = viridis(64),
-       main = 'Observed Fire Incidence\nMarch1-7, 2017 (Ground Truth)'),
-      split=c(2, 1, 2, 1), more = FALSE) 
+cell_counts_dwn = as.data.frame(table((test_calls %over% grdDown)$I))
+grdDown = merge(grdDown, cell_counts, by.x = 'I', 
+                by.y = 'Var1', all.x = TRUE)
+grdDown@data[is.na(grdDown$Freq), 'Freq'] = 0
+
+pdf(paste0('pred_all_', start_str, '.pdf'))
+spplot(grdSPDF, zcol = 'pred.count', col.regions = viridis(64),
+       main = 'Implied Intensity Surface')
+dev.off()
+
+pdf(paste0('actu_all_', start_str, '.pdf'))
+spplot(grdSPDF, zcol = 'Freq', col.regions = viridis(64),
+       main = 'Observed Fire Incidence')
+dev.off()
+
+pdf(paste0('pred_dwn_', start_str, '.pdf'))
+spplot(grdDown, zcol = 'pred.count', col.regions = viridis(64),
+       main = 'Implied Intensity Surface')
+dev.off()
+
+pdf(paste0('actu_dwn_', start_str, '.pdf'))
+spplot(grdDown, zcol = 'Freq', col.regions = viridis(64),
+       main = 'Observed Fire Incidence')
 dev.off()
