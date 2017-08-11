@@ -33,7 +33,7 @@ if (!length(args)) {
   names(args) =
     c('delx', 'dely', 'alpha', 'eta', 'lt', 'theta', 
       'features', 'l1', 'l2', 'kde.bw', 'kde.lags',
-      'kde.win', 'call.type', 'start_str')
+      'kde.win', 'start_str')
   attach(args)
 }
 
