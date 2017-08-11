@@ -2,10 +2,14 @@ library(shiny)
 
 ui <- shinyUI(fluidPage(
   titlePanel("Predicted Weekly Fire Locations in Seattle"),
-  fluidRow(column(6, plotOutput("pred_full", height = "600px")),
-           column(6, plotOutput("actu_full", height = "600px"))),
-  fluidRow(column(6, plotOutput("pred_down", height = "600px")),
-           column(6, plotOutput("actu_down", height = "600px"))),
+  h4("Predicted vs. Actual Intensity for the Whole City"),
+  fluidRow(column(6, plotOutput("pred_full", height = "500px")),
+           column(6, plotOutput("actu_full", height = "500px"))),
+  hr(),
+  h4("Predicted vs. Actual Intensity for Downtown Seattle"),
+  fluidRow(column(6, plotOutput("pred_down", height = "500px")),
+           column(6, plotOutput("actu_down", height = "500px"))),
+  hr(),
   fluidRow(column(12, selectInput(
     "wk", "Week:", width = "100%",
     choices = list(
