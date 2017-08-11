@@ -35,6 +35,7 @@ if (!length(args)) {
       'features', 'l1', 'l2', 'kde.bw', 'kde.lags',
       'kde.win', 'start_str')
   attach(args)
+  start_str = as.character(start_str)
 }
 
 
