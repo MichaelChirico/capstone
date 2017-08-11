@@ -26,19 +26,23 @@ server <- shinyServer(function(input, output) {
   output$trajectory <- renderPlot(traj_yr(input$yr))
   output$pred_full <- renderImage(
     list(src = paste0('./images/pred_all_', input$wk, '.png'),
-         alt = "Predictions for All of Seattle")
+         alt = "Predictions for All of Seattle"),
+    deleteFile = FALSE
   )
   output$actu_full <- renderImage(
     list(src = paste0('./images/actu_all_', input$wk, '.png'),
-         alt = "Actual Hotspots for All of Seattle")
+         alt = "Actual Hotspots for All of Seattle"),
+    deleteFile = FALSE
   )
   output$pred_down <- renderImage(
     list(src = paste0('./images/pred_dwn_', input$wk, '.png'),
-         alt = "Predictions for Downtown Seattle")
+         alt = "Predictions for Downtown Seattle"),
+    deleteFile = FALSE
   )
   output$actu_down <- renderImage(
     list(src = paste0('./images/actu_dwn_', input$wk, '.png'),
-         alt = "Actual Hotspots for Downtown Seattle")
+         alt = "Actual Hotspots for Downtown Seattle"),
+    deleteFile = FALSE
   )
 })
 
