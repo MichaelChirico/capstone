@@ -439,16 +439,23 @@ grdSPDF = SpatialPolygonsDataFrame(
 cat('elision\n')
 grdSPDF = elide(grdSPDF, rotate = 180/pi * theta,
                 center = point0)
+calls.sp = elide(calls.sp, rotate = 180/pi * theta,
+                 center = point0)
 
 grdSPDF = merge(grdSPDF, X, by = 'I', all.x = TRUE)
 grdSPDF[is.na(grdSPDF$pred.count), 'pred.count'] = 0
+
 proj4string(grdSPDF) = prj
+proj4string(calls.sp) = prj
+
+seattleSP = spTransform(readOGR('data', 'Neighborhoods'), prj)
+seattle_bound = gUnaryUnion(seattleSP)
 
 cat('clipping\n')
 grdSPDF = 
   SpatialPolygonsDataFrame(
-    gIntersection(grdSPDF, seattle, byid = TRUE),
-    data = grdSPDF@data[gIntersects(grdSPDF, seattle, byid = TRUE), ],
+    gIntersection(grdSPDF, seattle_bound, byid = TRUE),
+    data = grdSPDF@data[gIntersects(grdSPDF, seattle_bound, byid = TRUE), ],
     match.ID = FALSE
   )
 
@@ -456,10 +463,8 @@ test_calls =
   calls.sp[calls.sp$date %between% 
              (as.IDate(start_str, format = '%Y%m%d') + c(0L, 6L)), ]
 
-seattle = spTransform(readOGR('data', 'Neighborhoods'), prj)
-
-down_idx = with(seattle@data, !is.na(L_HOOD) & L_HOOD == 'DOWNTOWN')
-seattle_down = gUnaryUnion(seattle[down_idx, ])
+down_idx = with(seattleSP@data, !is.na(L_HOOD) & L_HOOD == 'DOWNTOWN')
+seattle_down = gUnaryUnion(seattleSP[down_idx, ])
 
 grdDown = 
   SpatialPolygonsDataFrame(
@@ -475,7 +480,7 @@ grdSPDF = merge(grdSPDF, cell_counts_all, by.x = 'I',
 grdSPDF@data[is.na(grdSPDF$Freq), 'Freq'] = 0
 
 cell_counts_dwn = as.data.frame(table((test_calls %over% grdDown)$I))
-grdDown = merge(grdDown, cell_counts, by.x = 'I', 
+grdDown = merge(grdDown, cell_counts_dwn, by.x = 'I', 
                 by.y = 'Var1', all.x = TRUE)
 grdDown@data[is.na(grdDown$Freq), 'Freq'] = 0
 
